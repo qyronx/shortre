@@ -842,7 +842,9 @@
                 browser: 'Browser',
                 codeGenerationFailed: 'Code generation failed, please try again',
                 invalidPrivateKey: 'Please enter a valid private key (64 characters)',
-                invalidEventId: 'Invalid event ID'
+                invalidEventId: 'Invalid event ID',
+                customCodeTaken: 'This custom code is already taken. Please choose another.',
+                duplicateCheckError: 'Failed to verify code availability. Please try again.'
             },
             ko: {
                 keyStatus: '개인키 없음',
@@ -896,7 +898,9 @@
                 browser: '브라우저',
                 codeGenerationFailed: '코드 생성 실패, 다시 시도해주세요',
                 invalidPrivateKey: '유효한 개인키를 입력해주세요 (64자리)',
-                invalidEventId: '유효하지 않은 이벤트 ID입니다'
+                invalidEventId: '유효하지 않은 이벤트 ID입니다',
+                customCodeTaken: '이미 사용 중인 코드입니다. 다른 코드를 입력해주세요.',
+                duplicateCheckError: '코드 중복 확인에 실패했습니다. 다시 시도해주세요.'
             },
             ja: {
                 keyStatus: '秘密鍵なし',
@@ -950,7 +954,9 @@
                 browser: 'ブラウザ',
                 codeGenerationFailed: 'コード生成失敗、再試行してください',
                 invalidPrivateKey: '有効な秘密鍵を入力してください（64文字）',
-                invalidEventId: '無効なイベントIDです'
+                invalidEventId: '無効なイベントIDです',
+                customCodeTaken: 'このカスタムコードは既に使用されています。別のコードを選択してください。',
+                duplicateCheckError: 'コードの重複確認に失敗しました。もう一度お試しください。'
             },
             zh: {
                 keyStatus: '无私钥',
@@ -1004,7 +1010,9 @@
                 browser: '浏览器',
                 codeGenerationFailed: '代码生成失败，请重试',
                 invalidPrivateKey: '请输入有效的私钥（64位）',
-                invalidEventId: '无效的事件ID'
+                invalidEventId: '无效的事件ID',
+                customCodeTaken: '此自定义代码已被使用，请选择其他代码。',
+                duplicateCheckError: '代码重复检查失败，请重试。'
             }
         };
 
@@ -1960,23 +1968,79 @@
             btn.disabled = true;
             
             try {
-                let shortCode = customCode || generateShortCode();
-                
-                let attempts = 0;
-                let existing = await findUrlByCode(shortCode);
-                while (existing && attempts < 3) {
+                let shortCode;
+
+                if (customCode) {
+                    let existing;
+                    try {
+                        existing = await findUrlByCode(customCode);
+                    } catch (checkError) {
+                        showNotification('duplicateCheckError', 'error');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    if (existing) {
+                        showNotification('customCodeTaken', 'error');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    shortCode = customCode;
+                } else {
                     shortCode = generateShortCode();
-                    existing = await findUrlByCode(shortCode);
-                    attempts++;
+
+                    let attempts = 0;
+                    let existing;
+                    try {
+                        existing = await findUrlByCode(shortCode);
+                    } catch (checkError) {
+                        showNotification('duplicateCheckError', 'error');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    while (existing && attempts < 5) {
+                        shortCode = generateShortCode();
+                        try {
+                            existing = await findUrlByCode(shortCode);
+                        } catch (checkError) {
+                            showNotification('duplicateCheckError', 'error');
+                            btn.textContent = originalText;
+                            btn.disabled = false;
+                            return;
+                        }
+                        attempts++;
+                    }
+
+                    if (existing) {
+                        showNotification('codeGenerationFailed', 'error');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
                 }
-                
-                if (existing) {
-                    showNotification('codeGenerationFailed', 'error');
+
+                let finalCheck;
+                try {
+                    finalCheck = await findUrlByCode(shortCode);
+                } catch (checkError) {
+                    showNotification('duplicateCheckError', 'error');
                     btn.textContent = originalText;
                     btn.disabled = false;
                     return;
                 }
-                
+
+                if (finalCheck) {
+                    showNotification(customCode ? 'customCodeTaken' : 'codeGenerationFailed', 'error');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
                 await saveUrlToNostr(privateKey, shortCode, url);
                 
                 displayResult({ shortUrl: shortCode });
