@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shortre - URL 단축 서비스</title>
+    <title>Shortre - URL Shortening Service</title>
     
     <script type="importmap">
     {
@@ -449,7 +449,9 @@
             max-width: 700px;
             width: 90%;
             max-height: 80vh;
-            overflow-y: auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
             animation: slideUp 0.3s ease;
         }
         .modal-header {
@@ -458,6 +460,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
         .modal-header h2 {
             font-size: 22px;
@@ -478,6 +481,24 @@
         }
         .modal-body {
             padding: 28px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+        .visit-history-wrapper {
+            max-height: 260px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        .visit-history-wrapper table {
+            margin-top: 0;
+        }
+        .visit-history-wrapper thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }
         .setting-group {
             margin-bottom: 24px;
@@ -1160,14 +1181,105 @@
             }, 3000);
         }
 
+        const VISITOR_ID_STORAGE_KEY = 'shorter_visitor_id';
+
+        function createRandomId(prefix = '') {
+            const randomPart = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+                ? globalThis.crypto.randomUUID()
+                : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+            return prefix ? `${prefix}_${randomPart}` : randomPart;
+        }
+
+        function getOrCreateVisitorId() {
+            try {
+                const stored = localStorage.getItem(VISITOR_ID_STORAGE_KEY);
+                if (stored) return stored;
+
+                const visitorId = createRandomId('visitor');
+                localStorage.setItem(VISITOR_ID_STORAGE_KEY, visitorId);
+                return visitorId;
+            } catch (e) {
+                if (!getOrCreateVisitorId.fallbackId) {
+                    getOrCreateVisitorId.fallbackId = createRandomId('visitor');
+                }
+                return getOrCreateVisitorId.fallbackId;
+            }
+        }
+
+        function getVisitKey(visit, fallbackKey = '') {
+            if (visit && visit.visitId) return visit.visitId;
+            if (fallbackKey) return fallbackKey;
+            return [
+                visit?.time || 0,
+                visit?.visitorId || '',
+                visit?.os || '',
+                visit?.device || '',
+                visit?.browser || ''
+            ].join('_');
+        }
+
+        function readLocalAnalytics(code) {
+            try {
+                const stored = localStorage.getItem('shorter_analytics_' + code);
+                if (!stored) return { visits: [], uniqueVisitors: new Set() };
+
+                const parsed = JSON.parse(stored);
+                return {
+                    visits: Array.isArray(parsed.visits) ? parsed.visits : [],
+                    uniqueVisitors: new Set(Array.isArray(parsed.uniqueVisitors) ? parsed.uniqueVisitors : [])
+                };
+            } catch (e) {
+                return { visits: [], uniqueVisitors: new Set() };
+            }
+        }
+
+        function mergeAnalyticsSources(...sources) {
+            const visitMap = new Map();
+            const uniqueVisitors = new Set();
+
+            for (const source of sources) {
+                if (!source) continue;
+
+                const visits = Array.isArray(source.visits) ? source.visits : [];
+                visits.forEach((visit, index) => {
+                    const key = getVisitKey(visit, source.fallbackPrefix ? `${source.fallbackPrefix}:${index}` : '');
+                    if (!visitMap.has(key)) visitMap.set(key, visit);
+                    if (visit?.visitorId) uniqueVisitors.add(visit.visitorId);
+                });
+
+                const visitors = source.uniqueVisitors instanceof Set
+                    ? source.uniqueVisitors
+                    : new Set(Array.isArray(source.uniqueVisitors) ? source.uniqueVisitors : []);
+                visitors.forEach(visitorId => uniqueVisitors.add(visitorId));
+            }
+
+            return {
+                visits: Array.from(visitMap.values()).sort((a, b) => (a.time || 0) - (b.time || 0)),
+                uniqueVisitors
+            };
+        }
+
+        function persistAnalytics(code, data) {
+            analyticsData.set(code, data);
+            try {
+                localStorage.setItem('shorter_analytics_' + code, JSON.stringify({
+                    visits: data.visits,
+                    uniqueVisitors: Array.from(data.uniqueVisitors)
+                }));
+            } catch (e) {
+            }
+        }
+
         async function saveAnalyticsToNostr(ephemeralPrivateKey, code, visits, uniqueVisitors, ownerPubkey) {
-            const signer = new NDKPrivateKeySigner(ephemeralPrivateKey); // 전역 캐시(getSigner) 사용 금지 — 매번 독립된 일회용 signer
+            const signer = new NDKPrivateKeySigner(ephemeralPrivateKey);
             const ephemeralPubkey = signer.pubkey;
+            const primaryVisitId = visits?.[0]?.visitId || createRandomId('visit');
 
             const content = JSON.stringify({
                 type: 'SHORTER_ANALYTICS',
-                code: code,
-                visits: visits,
+                schemaVersion: 2,
+                code,
+                visits,
                 uniqueVisitors: Array.from(uniqueVisitors),
                 updated: Date.now()
             });
@@ -1181,16 +1293,19 @@
             event.content = content;
             event.created_at = Math.floor(Date.now() / 1000);
             event.pubkey = ephemeralPubkey;
-
-            event.tags = [];
-            event.tags.push(['t', 'SHORTER_ANALYTICS']);
-            event.tags.push(['d', code]);
+            event.tags = [
+                ['t', 'SHORTER_ANALYTICS'],
+                ['d', `analytics:${code}:${primaryVisitId}`],
+                ['p', ownerPubkey]
+            ];
 
             await event.sign(signer);
+
             try {
                 await event.publish();
             } catch (e) {
-                await sendEventToRelay('wss://nos.lol', event);
+                const sent = await sendEventToRelay('wss://nos.lol', event);
+                if (!sent) throw e;
             }
         }
 
@@ -1207,88 +1322,93 @@
                 '#p': [pubKey]
             };
 
-            const events = await ndk.fetchEvents(filter, { closeOnEose: true, groupable: false });
-            await new Promise(r => setTimeout(r, 800));
+            const events = await ndk.fetchEvents(filter, {
+                closeOnEose: true,
+                groupable: false
+            });
 
-            const seenEventIds = new Set();
+            const remoteByCode = new Map();
+
             for (const event of events) {
-                if (seenEventIds.has(event.id)) continue;
-                seenEventIds.add(event.id);
                 try {
                     const content = JSON.parse(event.content);
-                    if (content.type === 'SHORTER_ANALYTICS' && content.code) {
-                        const existing = analyticsData.get(content.code) || { visits: [], uniqueVisitors: new Set() };
-                        const existingKeys = new Set(existing.visits.map(v => v.time + '_' + v.visitorId));
-                        const newVisits = (content.visits || []).filter(v => !existingKeys.has(v.time + '_' + v.visitorId));
-                        const mergedVisits = [...existing.visits, ...newVisits];
-                        const mergedVisitors = new Set([...existing.uniqueVisitors, ...(content.uniqueVisitors || [])]);
-                        analyticsData.set(content.code, { visits: mergedVisits, uniqueVisitors: mergedVisitors });
-                        localStorage.setItem('shorter_analytics_' + content.code, JSON.stringify({
-                            visits: mergedVisits,
-                            uniqueVisitors: Array.from(mergedVisitors)
-                        }));
-                    }
-                } catch (e) {}
+                    if (content.type !== 'SHORTER_ANALYTICS' || !content.code) continue;
+
+                    const rawVisits = Array.isArray(content.visits)
+                        ? content.visits
+                        : (content.visit ? [content.visit] : []);
+                    const visits = rawVisits.map((visit, index) => ({
+                        ...visit,
+                        visitId: visit.visitId || `legacy_${event.id || createRandomId('event')}_${index}`
+                    }));
+
+                    const eventData = {
+                        visits,
+                        uniqueVisitors: Array.isArray(content.uniqueVisitors) ? content.uniqueVisitors : []
+                    };
+
+                    const current = remoteByCode.get(content.code);
+                    remoteByCode.set(content.code, mergeAnalyticsSources(current, eventData));
+                } catch (e) {
+                }
+            }
+
+            for (const [code, remoteData] of remoteByCode) {
+                const merged = mergeAnalyticsSources(
+                    analyticsData.get(code),
+                    readLocalAnalytics(code),
+                    remoteData
+                );
+                persistAnalytics(code, merged);
             }
         }
+
         function generateEphemeralKey() {
             const signer = NDKPrivateKeySigner.generate();
             return signer.privateKey;
         }
-        async function recordVisit(code) {
-            if (!analyticsData.has(code)) {
-                analyticsData.set(code, {
-                    visits: [],
-                    uniqueVisitors: new Set()
-                });
-            }
 
+        async function recordVisit(code, knownOwnerPubkey = null) {
             const info = getClientInfo();
-            const visitorId = localStorage.getItem('shorter_visitor_id') || generateVisitorId();
-            if (!localStorage.getItem('shorter_visitor_id')) {
-                localStorage.setItem('shorter_visitor_id', visitorId);
-            }
+            const visitorId = getOrCreateVisitorId();
+            const now = Date.now();
 
-            const data = analyticsData.get(code);
             const visitData = {
-                time: Date.now(),
+                time: now,
+                visitedAt: new Date(now).toISOString(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown',
                 ...info,
-                visitorId: visitorId
+                visitorId,
+                visitId: createRandomId('visit')
             };
-            data.visits.push(visitData);
-            data.uniqueVisitors.add(visitorId);
 
-            localStorage.setItem('shorter_analytics_' + code, JSON.stringify({
-                visits: data.visits,
-                uniqueVisitors: Array.from(data.uniqueVisitors)
-            }));
+            const merged = mergeAnalyticsSources(
+                analyticsData.get(code),
+                readLocalAnalytics(code),
+                { visits: [visitData], uniqueVisitors: [visitorId] }
+            );
+            persistAnalytics(code, merged);
 
-            const ownerPubkey = await getUrlOwnerPubkey(code);
+            const ownerPubkey = knownOwnerPubkey || await getUrlOwnerPubkey(code);
             if (!ownerPubkey) return;
 
             const ephemeralKey = generateEphemeralKey();
-            await saveAnalyticsToNostr(ephemeralKey, code, [visitData], new Set([visitorId]), ownerPubkey);
-        }
-
-        function generateVisitorId() {
-            return 'visitor_' + Math.random().toString(36).substring(2, 15);
+            await saveAnalyticsToNostr(
+                ephemeralKey,
+                code,
+                [visitData],
+                new Set([visitorId]),
+                ownerPubkey
+            );
         }
 
         function loadAnalytics() {
             state.urls.forEach(url => {
-                const stored = localStorage.getItem('shorter_analytics_' + url.code);
-                if (stored) {
-                    try {
-                        const data = JSON.parse(stored);
-                        const existing = analyticsData.get(url.code) || { visits: [], uniqueVisitors: new Set() };
-                        const mergedVisits = [...existing.visits, ...(data.visits || [])];
-                        const mergedVisitors = new Set([...existing.uniqueVisitors, ...(data.uniqueVisitors || [])]);
-                        analyticsData.set(url.code, {
-                            visits: mergedVisits,
-                            uniqueVisitors: mergedVisitors
-                        });
-                    } catch (e) {}
-                }
+                const merged = mergeAnalyticsSources(
+                    analyticsData.get(url.code),
+                    readLocalAnalytics(url.code)
+                );
+                persistAnalytics(url.code, merged);
             });
         }
 
@@ -1355,14 +1475,14 @@
             
             if (data.visits.length > 0) {
                 html += `<h3 style="margin-top:20px;">${translations.visitHistory}</h3>`;
-                html += `<table class="stats-table"><thead><tr><th>${translations.time}</th><th>${translations.os}</th><th>${translations.device}</th><th>${translations.browser}</th></tr></thead><tbody>`;
+                html += `<div class="visit-history-wrapper"><table class="stats-table"><thead><tr><th>${translations.time}</th><th>${translations.os}</th><th>${translations.device}</th><th>${translations.browser}</th></tr></thead><tbody>`;
                 const recentVisits = data.visits.slice(-20).reverse();
                 recentVisits.forEach(v => {
                     const date = new Date(v.time);
                     const timeStr = date.toLocaleString(currentLanguage === 'ko' ? 'ko-KR' : currentLanguage === 'ja' ? 'ja-JP' : currentLanguage === 'zh' ? 'zh-CN' : 'en-US');
                     html += `<tr><td>${timeStr}</td><td>${v.os}</td><td>${v.device}</td><td>${v.browser}</td></tr>`;
                 });
-                html += `</tbody></table>`;
+                html += `</tbody></table></div>`;
             }
             
             elements.statsContent.innerHTML = html;
@@ -1493,7 +1613,7 @@
             for (const event of events) {
                 try {
                     const content = JSON.parse(event.content);
-                    if (content.type === 'SHORTER_URL' || content.code === code) {
+                    if (content.type === 'SHORTER_URL' && content.code === code) {
                         return event.pubkey;
                     }
                 } catch (e) {}
@@ -1613,12 +1733,14 @@
             `;
             
             try {
-                await recordVisit(code);
-                
                 const result = await findUrlByCode(code);
                 
                 if (result && result.url) {
-                    window.location.href = result.url;
+                    try {
+                        await recordVisit(code, result.pubkey || result.owner);
+                    } catch (analyticsError) {
+                    }
+                    window.location.replace(result.url);
                 } else {
                     document.querySelector('.container').innerHTML = `
                         <div style="text-align:center;padding:40px;">
