@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shortre - URL 단축 서비스</title>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "@nostr-dev-kit/ndk": "https://esm.sh/@nostr-dev-kit/ndk@3.0.3?bundle",
+            "nostr-tools/nip19": "https://esm.sh/nostr-tools@2.7.2/nip19"
+        }
+    }
+    </script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #6C63FF;
+            --primary-dark: #5A52D5;
+            --bg: #F8F9FE;
+            --card-bg: #FFFFFF;
+            --text: #2D2D3F;
+            --text-light: #6B6B80;
+            --border: #E8E8F0;
+            --shadow: 0 8px 30px rgba(108, 99, 255, 0.12);
+            --radius: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        .navbar {
+            background: var(--card-bg);
+            padding: 16px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .nav-menu {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 30px;
+            background: var(--bg);
+            color: var(--text);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .nav-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+        #keyStatus {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            background: var(--bg);
+            border-radius: 30px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+        .hero-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .hero-content h1 {
+            font-size: 40px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary), #FF6584);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-light);
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .card-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .badge {
+            background: linear-gradient(135deg, var(--primary), #FF6584);
+            color: white;
+            padding: 4px 14px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .url-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 14px 20px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 16px;
+            transition: var(--transition);
+            background: var(--bg);
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.08);
+        }
+        .btn-primary {
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(108, 99, 255, 0.3);
+        }
+        .btn-secondary {
+            padding: 12px 24px;
+            background: var(--bg);
+            color: var(--text);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-secondary:hover {
+            background: var(--text);
+            color: white;
+        }
+        .btn-danger {
+            padding: 10px 20px;
+            background: #FFF0F0;
+            color: #E74C3C;
+            border: 2px solid #FDD;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-danger:hover {
+            background: #E74C3C;
+            color: white;
+            transform: scale(1.02);
+        }
+        .custom-code-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg);
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+        }
+        .domain-prefix {
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        .custom-code-group input {
+            flex: 1;
+            padding: 8px 4px;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            outline: none;
+        }
+        .hint {
+            color: var(--text-light);
+            font-size: 12px;
+        }
+        .result-area {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid var(--border);
+            animation: slideUp 0.4s ease;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .result-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .short-url-display {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: 12px;
+        }
+        .url-label {
+            font-size: 12px;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .url-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        .url-wrapper a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            word-break: break-all;
+        }
+        .url-wrapper a:hover {
+            text-decoration: underline;
+        }
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            color: var(--text);
+        }
+        .copy-btn svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+        }
+        .copy-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.25);
+        }
+        .copy-btn:hover svg {
+            stroke: white;
+        }
+        .url-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .url-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--bg);
+            border-radius: 12px;
+            transition: var(--transition);
+            gap: 12px;
+        }
+        .url-item:hover {
+            background: #EEEEFF;
+            transform: translateX(4px);
+        }
+        .url-item-left {
+            flex: 1;
+            min-width: 0;
+        }
+        .url-item-code {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 15px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+        .url-item-original {
+            color: var(--text-light);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px;
+        }
+        .url-item-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .url-item-stats .stat-item {
+            font-size: 12px;
+            color: var(--text-light);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .url-item-stats .stat-icon {
+            width: 14px;
+            height: 14px;
+            stroke: var(--text-light);
+        }
+        .url-item-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #6B6B80;
+        }
+        .icon-btn svg {
+            width: 20px;
+            height: 20px;
+            stroke: #6B6B80;
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            background: rgba(108, 99, 255, 0.08);
+        }
+        .icon-btn:hover svg {
+            stroke: #6C63FF;
+        }
+        .icon-btn.delete-btn:hover {
+            background: rgba(239, 68, 68, 0.08);
+        }
+        .icon-btn.delete-btn:hover svg {
+            stroke: #EF4444;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background: white;
+            border-radius: var(--radius);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+        .modal-header {
+            padding: 24px 28px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            font-size: 22px;
+        }
+        .close-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--bg);
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .close-btn:hover {
+            background: #FFE8E8;
+            transform: rotate(90deg);
+        }
+        .modal-body {
+            padding: 28px;
+        }
+        .setting-group {
+            margin-bottom: 24px;
+        }
+        .setting-group label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .key-display {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .key-display input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            background: var(--bg);
+        }
+        .login-options {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .divider {
+            text-align: center;
+            color: var(--text-light);
+            font-size: 14px;
+            position: relative;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background: var(--border);
+        }
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .login-form label {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .login-form input {
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            transition: var(--transition);
+        }
+        .login-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .notification-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            border-left: 4px solid #10B981;
+            font-weight: 600;
+            z-index: 9999;
+            max-width: 400px;
+            animation: slideUp 0.4s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #1a1a2e;
+        }
+        @media (max-width: 768px) {
+            .hero-content h1 { font-size: 32px; }
+            .card { padding: 20px; }
+            .input-group { flex-direction: column; }
+            .input-group button { width: 100%; }
+            .url-wrapper { flex-direction: column; align-items: stretch; }
+            .url-item { flex-direction: column; align-items: stretch; gap: 8px; }
+            .url-item-actions { justify-content: flex-end; }
+            .custom-code-group { flex-wrap: wrap; }
+            .nav-container { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- HTML 내용 생략 (기존과 동일) -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">Shortre</a>
+            <div class="nav-menu">
+                <span id="keyStatus">개인키 없음</span>
+                <button class="nav-btn" id="generateKeyBtn">새 키 생성</button>
+                <button class="nav-btn" id="settingsBtn">설정</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="hero-section">
+            <div class="hero-content">
+                <h1>긴 URL을<br><span class="gradient-text">짧게</span> 만들어보세요</h1>
+                <p class="subtitle">Shortre으로 간편하게 URL을 단축하고 관리하세요</p>
+            </div>
+        </section>
+
+        <div class="card url-card">
+            <div class="card-header">
+                <h2>URL 단축하기</h2>
+            </div>
+            
+            <div class="url-form">
+                <div class="input-group">
+                    <input type="url" id="urlInput" placeholder="https://example.com/very-long-url..." />
+                    <button class="btn-primary" id="shortenBtn">단축</button>
+                </div>
+                
+                <div class="custom-code-group">
+                    <span class="domain-prefix" id="domainPrefix"></span>
+                    <input type="text" id="customCode" placeholder="custom" maxlength="20" />
+                    <span class="hint">(선택사항)</span>
+                </div>
+            </div>
+
+            <div id="resultArea" class="result-area" style="display:none;">
+                <div class="result-content">
+                    <div class="short-url-display">
+                        <span class="url-label">단축 URL</span>
+                        <div class="url-wrapper">
+                            <a href="#" id="shortUrl" target="_blank"></a>
+                            <button class="copy-btn" onclick="window.copyToClipboard()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                                복사
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card urls-card" id="urlsCard" style="display:none;">
+            <div class="card-header">
+                <h2>내 URL 목록</h2>
+                <span class="badge" id="urlCount">0개</span>
+            </div>
+            <div id="urlList" class="url-list"></div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>설정</h2>
+                <button class="close-btn" onclick="window.closeModal('settingsModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>개인키 (Private Key)</label>
+                    <div class="key-display">
+                        <input type="text" id="privateKeyDisplay" readonly />
+                        <button class="copy-btn" onclick="window.copyPrivateKey()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                            복사
+                        </button>
+                    </div>
+                    <button class="btn-danger" onclick="window.resetAccount()">계정 초기화</button>
+                </div>
+                <div class="setting-group">
+                    <label>공개키</label>
+                    <div style="background: var(--bg); padding: 16px; border-radius: 12px; font-size: 14px; word-break: break-all;">
+                        <span id="pubKeyDisplay" style="font-weight: 600; color: var(--primary);">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>로그인</h2>
+                <button class="close-btn" onclick="window.closeModal('loginModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="login-options">
+                    <button class="btn-primary" id="newAccountBtn">새 계정 만들기</button>
+                    <div class="divider">또는</div>
+                    <div class="login-form">
+                        <label>개인키로 로그인</label>
+                        <input type="text" id="loginKeyInput" placeholder="개인키를 입력하세요" />
+                        <button class="btn-secondary" id="loginBtn">로그인</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as NDKModule from '@nostr-dev-kit/ndk';
+        import { nsecEncode, decode as nip19Decode } from 'nostr-tools/nip19';
+
+        const NDK = NDKModule.default?.NDK ?? NDKModule.NDK ?? NDKModule.default;
+        const NDKEvent = NDKModule.NDKEvent ?? NDKModule.default?.NDKEvent;
+        const NDKPrivateKeySigner = NDKModule.NDKPrivateKeySigner ?? NDKModule.default?.NDKPrivateKeySigner;
+
+        if (!NDK || !NDKEvent || !NDKPrivateKeySigner) {
+            console.error('[Shorter] Module load failed');
+            throw new Error('NDK exports not found');
+        }
+
+        const state = {
+            privateKey: null,
+            pubKey: null,
+            urls: []
+        };
+
+        const elements = {
+            keyStatus: document.getElementById('keyStatus'),
+            generateKeyBtn: document.getElementById('generateKeyBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            shortenBtn: document.getElementById('shortenBtn'),
+            urlInput: document.getElementById('urlInput'),
+            customCode: document.getElementById('customCode'),
+            resultArea: document.getElementById('resultArea'),
+            shortUrl: document.getElementById('shortUrl'),
+            urlsCard: document.getElementById('urlsCard'),
+            urlList: document.getElementById('urlList'),
+            urlCount: document.getElementById('urlCount'),
+            privateKeyDisplay: document.getElementById('privateKeyDisplay'),
+            pubKeyDisplay: document.getElementById('pubKeyDisplay'),
+            loginKeyInput: document.getElementById('loginKeyInput'),
+            newAccountBtn: document.getElementById('newAccountBtn'),
+            loginBtn: document.getElementById('loginBtn'),
+            domainPrefix: document.getElementById('domainPrefix')
+        };
+
+        elements.domainPrefix.textContent = window.location.host + '/';
+
+        let globalSigner = null;
+        let globalPubKey = null;
+
+        function getSigner(privateKey) {
+            if (!globalSigner) {
+                globalSigner = new NDKPrivateKeySigner(privateKey);
+                globalPubKey = globalSigner.pubkey;
+                console.log('🔑 Signer 초기화, pubkey:', globalPubKey);
+            }
+            return globalSigner;
+        }
+
+        function generatePrivateKey() {
+            const existingKey = getStoredPrivateKey();
+            if (existingKey) {
+                console.log('🔑 기존 개인키 사용:', existingKey.substring(0, 16) + '...');
+                const signer = new NDKPrivateKeySigner(existingKey);
+                const pubKey = signer.pubkey;
+                globalSigner = signer;
+                globalPubKey = pubKey;
+                return existingKey;
+            }
+            
+            const signer = NDKPrivateKeySigner.generate();
+            const privateKeyHex = signer.privateKey;
+            const pubKey = signer.pubkey;
+            
+            console.log('🔑 새 개인키 생성:', privateKeyHex.substring(0, 16) + '...');
+            console.log('🔑 공개키:', pubKey);
+            
+            globalSigner = signer;
+            globalPubKey = pubKey;
+            
+            try {
+                const privBytes = new Uint8Array(privateKeyHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+                const nsecEncoded = nsecEncode(privBytes);
+                localStorage.setItem('nostr_nsec', nsecEncoded);
+                localStorage.setItem('shorter_private_key', privateKeyHex);
+                localStorage.setItem('shorter_pub_key', pubKey);
+            } catch (e) {}
+            
+            return privateKeyHex;
+        }
+
+        function getStoredPrivateKey() {
+            const nsec = localStorage.getItem('nostr_nsec');
+            if (nsec && nsec.startsWith('nsec1')) {
+                try {
+                    const decoded = nip19Decode(nsec);
+                    const privateKeyHex = Array.from(decoded.data).map(b => b.toString(16).padStart(2, '0')).join('');
+                    if (!globalSigner) {
+                        globalSigner = new NDKPrivateKeySigner(privateKeyHex);
+                        globalPubKey = globalSigner.pubkey;
+                    }
+                    return privateKeyHex;
+                } catch (e) {}
+            }
+            const key = localStorage.getItem('shorter_private_key');
+            if (key && !globalSigner) {
+                globalSigner = new NDKPrivateKeySigner(key);
+                globalPubKey = globalSigner.pubkey;
+            }
+            return key || null;
+        }
+
+        function getStoredPubKey() {
+            return localStorage.getItem('shorter_pub_key') || globalPubKey || null;
+        }
+
+        function savePrivateKey(privateKey, pubKey) {
+            if (privateKey) {
+                localStorage.setItem('shorter_private_key', privateKey);
+                if (pubKey) localStorage.setItem('shorter_pub_key', pubKey);
+                return true;
+            }
+            return false;
+        }
+
+        function clearStoredKeys() {
+            localStorage.removeItem('shorter_private_key');
+            localStorage.removeItem('shorter_pub_key');
+            localStorage.removeItem('nostr_nsec');
+            globalSigner = null;
+            globalPubKey = null;
+        }
+
+        async function saveUrlToNostr(privateKey, shortCode, originalUrl) {
+            const signer = getSigner(privateKey);
+            const pubKey = globalPubKey || signer.pubkey;
+            
+            console.log('📝 저장할 pubkey:', pubKey);
+            
+            const content = JSON.stringify({
+                type: 'SHORTER_URL',
+                code: shortCode,
+                url: originalUrl,
+                created: Date.now(),
+                owner: pubKey
+            });
+
+            const ndk = new NDK({ explicitRelayUrls: ['wss://nos.lol'] });
+            await ndk.connect();
+
+            const event = new NDKEvent(ndk);
+            event.kind = 1;
+            event.content = content;
+            event.created_at = Math.floor(Date.now() / 1000);
+            event.pubkey = pubKey;
+            
+            event.tags = [];
+            event.tags.push(['t', 'SHORTEN!']);
+            event.tags.push(['d', shortCode]);
+
+            await event.sign(signer);
+            await event.publish();
+            
+            console.log('✅ 퍼블리시 완료');
+            return true;
+        }
+
+        async function findUrlByCode(shortCode) {
+            const ndk = new NDK({ explicitRelayUrls: ['wss://nos.lol'] });
+            await ndk.connect();
+
+            const filter = {
+                kinds: [1],
+                '#t': ['SHORTEN!']
+            };
+
+            const events = await ndk.fetchEvents(filter);
+
+            for (const event of events) {
+                try {
+                    const content = JSON.parse(event.content);
+                    if (content.type === 'SHORTER_URL' && content.code === shortCode) {
+                        return {
+                            url: content.url,
+                            owner: content.owner,
+                            created: content.created,
+                            pubkey: event.pubkey,
+                            id: event.id
+                        };
+                    }
+                } catch (e) {}
+            }
+            return null;
+        }
+
+        async function findUrlsByOwner(privateKey) {
+            const signer = getSigner(privateKey);
+            const pubKey = globalPubKey || signer.pubkey;
+            
+            console.log('🔍 조회할 pubkey:', pubKey);
+            
+            const ndk = new NDK({ explicitRelayUrls: ['wss://nos.lol'] });
+            await ndk.connect();
+
+            const filter = {
+                kinds: [1],
+                '#t': ['SHORTEN!']
+            };
+
+            const events = await ndk.fetchEvents(filter);
+
+            const urls = [];
+            for (const event of events) {
+                if (event.pubkey === pubKey) {
+                    try {
+                        const content = JSON.parse(event.content);
+                        if (content.type === 'SHORTER_URL') {
+                            urls.push({
+                                code: content.code,
+                                url: content.url,
+                                created: content.created,
+                                id: event.id
+                            });
+                            console.log('✅ 내 URL 찾음:', content.code, 'ID:', event.id);
+                        }
+                    } catch (e) {}
+                }
+            }
+            
+            console.log('내 URL 총', urls.length, '개');
+            return urls;
+        }
+
+        async function handleHashRedirect() {
+            const hash = window.location.hash;
+            if (!hash || !hash.startsWith('#/')) {
+                return;
+            }
+            
+            const code = hash.substring(2);
+            console.log('리다이렉트 요청:', code);
+            
+            document.querySelector('.container').innerHTML = `
+                <div style="display:flex;justify-content:center;align-items:center;height:50vh;flex-direction:column;gap:20px;">
+                    <div style="width:40px;height:40px;border:4px solid #E8E8F0;border-top:4px solid #6C63FF;border-radius:50%;animation:spin 1s linear infinite;"></div>
+                    <div style="color:#6B6B80;">리다이렉트 중...</div>
+                    <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+                </div>
+            `;
+            
+            try {
+                const result = await findUrlByCode(code);
+                
+                if (result && result.url) {
+                    console.log('✅ 리다이렉트:', result.url);
+                    window.location.href = result.url;
+                } else {
+                    document.querySelector('.container').innerHTML = `
+                        <div style="text-align:center;padding:40px;">
+                            <div style="font-size:72px;color:#6C63FF;">🔗</div>
+                            <h1 style="font-size:32px;color:#2D2D3F;">URL을 찾을 수 없습니다</h1>
+                            <p style="color:#6B6B80;">"${code}" 코드에 해당하는 URL이 없습니다.</p>
+                            <br>
+                            <a href="/" style="color:#6C63FF;text-decoration:underline;">홈으로 돌아가기</a>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 리다이렉트 오류:', error);
+                document.querySelector('.container').innerHTML = `
+                    <div style="text-align:center;padding:40px;">
+                        <div style="font-size:72px;">⚠️</div>
+                        <h1 style="font-size:32px;color:#2D2D3F;">오류가 발생했습니다</h1>
+                        <p style="color:#6B6B80;">${error.message}</p>
+                        <br>
+                        <a href="/" style="color:#6C63FF;text-decoration:underline;">홈으로 돌아가기</a>
+                    </div>
+                `;
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const colors = { success: '#10B981', error: '#EF4444', warning: '#F59E0B' };
+            const existing = document.querySelector('.notification-toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'notification-toast';
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                background: white;
+                padding: 16px 24px;
+                border-radius: 12px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+                border-left: 4px solid ${colors[type] || colors.success};
+                font-weight: 600;
+                z-index: 9999;
+                max-width: 400px;
+                animation: slideUp 0.4s ease;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: #1a1a2e;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.style.display = 'none';
+        }
+
+        function updateUI() {
+            const privateKey = getStoredPrivateKey();
+            const pubKey = getStoredPubKey();
+            
+            if (pubKey) {
+                elements.keyStatus.textContent = pubKey.substring(0, 8) + '...';
+                elements.keyStatus.style.color = '#10B981';
+            } else {
+                elements.keyStatus.textContent = '개인키 없음';
+                elements.keyStatus.style.color = '#EF4444';
+            }
+        }
+
+        function renderUrlList() {
+            if (!elements.urlList || !elements.urlsCard) return;
+            
+            if (state.urls.length === 0) {
+                elements.urlsCard.style.display = 'none';
+                return;
+            }
+            
+            elements.urlsCard.style.display = 'block';
+            if (elements.urlCount) elements.urlCount.textContent = state.urls.length + '개';
+            
+            elements.urlList.innerHTML = state.urls.map(item => {
+                const code = item.code || '';
+                console.log('렌더링할 코드:', code);
+                
+                return `
+                    <div class="url-item">
+                        <div class="url-item-left">
+                            <div class="url-item-code">/${code}</div>
+                            <div class="url-item-original">${item.url}</div>
+                            <div class="url-item-stats">
+                                <span class="stat-item">
+                                    <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                        <line x1="16" y1="2" x2="16" y2="6"/>
+                                        <line x1="8" y1="2" x2="8" y2="6"/>
+                                        <line x1="3" y1="10" x2="21" y2="10"/>
+                                    </svg>
+                                    ${new Date(item.created).toLocaleDateString('ko-KR')}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="url-item-actions">
+                            <button class="icon-btn" onclick="window.copyUrl('${code}')" title="복사">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                            <button class="icon-btn delete-btn" onclick="window.deleteUrl('${code}')" title="삭제">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    <line x1="10" y1="11" x2="10" y2="17"/>
+                                    <line x1="14" y1="11" x2="14" y2="17"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function displayResult(data) {
+            const fullUrl = window.location.origin + '/#/' + data.shortUrl;
+            if (elements.shortUrl) {
+                elements.shortUrl.href = fullUrl;
+                elements.shortUrl.textContent = fullUrl;
+            }
+            if (elements.resultArea) {
+                elements.resultArea.style.display = 'block';
+                elements.resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function generateShortCode() {
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        async function handleGenerateKey() {
+            try {
+                const privateKey = generatePrivateKey();
+                const pubKey = getStoredPubKey();
+                
+                if (!pubKey) {
+                    throw new Error('공개키 생성 실패');
+                }
+                
+                state.privateKey = privateKey;
+                state.pubKey = pubKey;
+                
+                updateUI();
+                showNotification('개인키가 준비되었습니다.');
+                closeModal('loginModal');
+                await loadMyUrls();
+            } catch (error) {
+                console.error('❌ 개인키 준비 실패:', error);
+                showNotification('개인키 준비 실패: ' + error.message, 'error');
+            }
+        }
+
+        async function handleLogin() {
+            const privateKey = elements.loginKeyInput.value.trim();
+            
+            if (!privateKey || privateKey.length !== 64) {
+                showNotification('유효한 개인키를 입력해주세요 (64자리)', 'error');
+                return;
+            }
+            
+            try {
+                const signer = new NDKPrivateKeySigner(privateKey);
+                const pubKey = signer.pubkey;
+                
+                if (!pubKey) {
+                    throw new Error('공개키 생성 실패');
+                }
+                
+                globalSigner = signer;
+                globalPubKey = pubKey;
+                savePrivateKey(privateKey, pubKey);
+                state.privateKey = privateKey;
+                state.pubKey = pubKey;
+                
+                await loadMyUrls();
+                updateUI();
+                showNotification('로그인 성공.');
+                closeModal('loginModal');
+            } catch (error) {
+                console.error('❌ 로그인 실패:', error);
+                showNotification('로그인 실패: ' + error.message, 'error');
+            }
+        }
+
+        async function handleShorten() {
+            const privateKey = getStoredPrivateKey();
+            
+            if (!privateKey) {
+                showNotification('먼저 개인키를 생성해주세요', 'warning');
+                openModal('loginModal');
+                return;
+            }
+            
+            const url = elements.urlInput.value.trim();
+            const customCode = elements.customCode.value.trim();
+            
+            if (!url) {
+                showNotification('URL을 입력해주세요', 'error');
+                return;
+            }
+            
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                showNotification('유효한 URL을 입력해주세요 (http:// 또는 https://)', 'error');
+                return;
+            }
+            
+            const btn = elements.shortenBtn;
+            const originalText = btn.textContent;
+            btn.textContent = '처리중...';
+            btn.disabled = true;
+            
+            try {
+                let shortCode = customCode || generateShortCode();
+                console.log('📝 생성할 코드:', shortCode);
+                
+                let attempts = 0;
+                let existing = await findUrlByCode(shortCode);
+                while (existing && attempts < 3) {
+                    shortCode = generateShortCode();
+                    console.log('🔄 중복, 새 코드 생성:', shortCode);
+                    existing = await findUrlByCode(shortCode);
+                    attempts++;
+                }
+                
+                if (existing) {
+                    showNotification('코드 생성 실패, 다시 시도해주세요', 'error');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+                
+                await saveUrlToNostr(privateKey, shortCode, url);
+                
+                displayResult({ shortUrl: shortCode });
+                showNotification('URL이 단축되었습니다.');
+                
+                await loadMyUrls();
+                
+                elements.urlInput.value = '';
+                elements.customCode.value = '';
+            } catch (error) {
+                console.error('❌ URL 단축 실패:', error);
+                showNotification('URL 단축 실패: ' + error.message, 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function loadMyUrls() {
+            const privateKey = getStoredPrivateKey();
+            if (!privateKey) {
+                console.log('❌ 개인키 없음');
+                return;
+            }
+            
+            try {
+                console.log('🔍 URL 목록 조회 시작...');
+                state.urls = await findUrlsByOwner(privateKey);
+                console.log('📊 state.urls:', state.urls);
+                renderUrlList();
+            } catch (error) {
+                console.error('❌ URL 로드 실패:', error);
+                state.urls = [];
+                renderUrlList();
+            }
+        }
+
+        async function deleteUrl(code) {
+            if (!confirm('"' + code + '" URL을 삭제하시겠습니까?')) return;
+            
+            const privateKey = getStoredPrivateKey();
+            if (!privateKey) {
+                showNotification('개인키가 없습니다', 'error');
+                return;
+            }
+            
+            try {
+                const signer = getSigner(privateKey);
+                const pubKey = globalPubKey || signer.pubkey;
+                
+                const targetEvent = state.urls.find(u => u.code === code);
+                if (!targetEvent) {
+                    showNotification('URL을 찾을 수 없습니다', 'error');
+                    return;
+                }
+                
+                const eventId = targetEvent.id;
+                if (!eventId || eventId.length !== 64) {
+                    console.error('❌ 유효하지 않은 이벤트 ID:', eventId);
+                    showNotification('유효하지 않은 이벤트 ID입니다', 'error');
+                    return;
+                }
+                
+                console.log('삭제할 이벤트 ID:', eventId);
+                
+                const ndk = new NDK({ explicitRelayUrls: ['wss://nos.lol'] });
+                await ndk.connect();
+                
+                const deleteEvent = new NDKEvent(ndk);
+                deleteEvent.kind = 5;
+                deleteEvent.content = '';
+                deleteEvent.created_at = Math.floor(Date.now() / 1000);
+                deleteEvent.pubkey = pubKey;
+                deleteEvent.tags = [
+                    ['e', eventId],
+                    ['k', '1']
+                ];
+                
+                console.log('삭제 이벤트 태그:', deleteEvent.tags);
+                
+                await deleteEvent.sign(signer);
+                
+                const success = await sendEventToRelay('wss://nos.lol', deleteEvent);
+                
+                if (!success) {
+                    await sendEventToRelay('wss://relay.damus.io', deleteEvent);
+                }
+                
+                state.urls = state.urls.filter(u => u.code !== code);
+                renderUrlList();
+                showNotification('URL이 삭제되었습니다.');
+                
+                setTimeout(async () => {
+                    await loadMyUrls();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('❌ 삭제 실패:', error);
+                showNotification('삭제 실패: ' + error.message, 'error');
+            }
+        }
+        function sendEventToRelay(relayUrl, event) {
+            return new Promise((resolve) => {
+                const ws = new WebSocket(relayUrl);
+                let resolved = false;
+                let timeout = null;
+                
+                const cleanup = () => {
+                    if (timeout) clearTimeout(timeout);
+                    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                        try { ws.close(); } catch (e) {}
+                    }
+                };
+                
+                ws.onopen = () => {
+                    console.log(`${relayUrl}에 삭제 이벤트 전송...`);
+                    
+                    // NDKEvent에서 raw event 추출
+                    const rawEvent = {
+                        id: event.id,
+                        pubkey: event.pubkey,
+                        created_at: event.created_at,
+                        kind: event.kind,
+                        tags: event.tags,
+                        content: event.content,
+                        sig: event.sig
+                    };
+                    
+                    console.log('이벤트:', JSON.stringify(rawEvent, null, 2));
+                    
+                    ws.send(JSON.stringify(['EVENT', rawEvent]));
+                    console.log('📤 이벤트 전송 완료');
+                    
+                    ws.onmessage = (msg) => {
+                        try {
+                            const data = JSON.parse(msg.data);
+                            console.log('📨 응답:', data);
+                            if (data[0] === 'OK' && data[1] === event.id) {
+                                if (data[2] === true) {
+                                    console.log(`✅ ${relayUrl} 삭제 성공`);
+                                    resolved = true;
+                                    cleanup();
+                                    resolve(true);
+                                } else {
+                                    console.log(`❌ ${relayUrl} 삭제 실패:`, data[3]);
+                                    resolved = true;
+                                    cleanup();
+                                    resolve(false);
+                                }
+                            }
+                        } catch (e) {}
+                    };
+                    
+                    timeout = setTimeout(() => {
+                        if (!resolved) {
+                            console.log(`⚠️ ${relayUrl} 응답 없음, 성공으로 간주`);
+                            resolved = true;
+                            cleanup();
+                            resolve(true);
+                        }
+                    }, 5000);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error(`❌ ${relayUrl} WebSocket 오류:`, error);
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        resolve(false);
+                    }
+                };
+                
+                ws.onclose = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        cleanup();
+                        resolve(false);
+                    }
+                };
+            });
+        }
+
+        function copyUrl(code) {
+            const url = window.location.origin + '/#/' + code;
+            navigator.clipboard.writeText(url).then(() => {
+                showNotification('URL이 복사되었습니다.');
+            }).catch(() => {
+                const input = document.createElement('input');
+                input.value = url;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showNotification('URL이 복사되었습니다.');
+            });
+        }
+
+        function copyToClipboard() {
+            if (!elements.shortUrl) return;
+            navigator.clipboard.writeText(elements.shortUrl.textContent).then(() => {
+                showNotification('복사 완료.');
+            });
+        }
+
+        function copyPrivateKey() {
+            const key = elements.privateKeyDisplay;
+            if (!key || !key.value) {
+                showNotification('복사할 개인키가 없습니다', 'warning');
+                return;
+            }
+            navigator.clipboard.writeText(key.value).then(() => {
+                showNotification('개인키가 복사되었습니다.');
+            });
+        }
+
+        function resetAccount() {
+            if (!confirm('개인키를 초기화하시겠습니까?')) return;
+            clearStoredKeys();
+            state.privateKey = null;
+            state.pubKey = null;
+            state.urls = [];
+            localStorage.removeItem('deleted_urls');
+            updateUI();
+            renderUrlList();
+            closeModal('settingsModal');
+            showNotification('개인키가 초기화되었습니다.');
+        }
+
+        function openSettings() {
+            const privateKey = getStoredPrivateKey();
+            const pubKey = getStoredPubKey();
+            
+            if (elements.privateKeyDisplay) elements.privateKeyDisplay.value = privateKey || '';
+            if (elements.pubKeyDisplay) elements.pubKeyDisplay.textContent = pubKey || '-';
+            
+            openModal('settingsModal');
+        }
+
+        window.copyUrl = copyUrl;
+        window.deleteUrl = deleteUrl;
+        window.copyToClipboard = copyToClipboard;
+        window.copyPrivateKey = copyPrivateKey;
+        window.resetAccount = resetAccount;
+        window.closeModal = closeModal;
+        window.openSettings = openSettings;
+
+        async function init() {
+            if (window.location.hash && window.location.hash.startsWith('#/')) {
+                await handleHashRedirect();
+                return;
+            }
+            
+            const savedKey = getStoredPrivateKey();
+            const savedPubKey = getStoredPubKey();
+            
+            if (savedKey) {
+                state.privateKey = savedKey;
+                state.pubKey = savedPubKey || globalPubKey;
+                
+                if (!globalSigner) {
+                    globalSigner = new NDKPrivateKeySigner(savedKey);
+                    globalPubKey = globalSigner.pubkey;
+                }
+                
+                updateUI();
+                await loadMyUrls();
+                console.log('✅ 저장된 키로 로드 완료');
+                console.log('🔑 pubkey:', globalPubKey);
+            } else {
+                console.log('🔑 저장된 키 없음, 로그인 모달 표시');
+                setTimeout(() => openModal('loginModal'), 500);
+            }
+            
+            elements.generateKeyBtn.addEventListener('click', handleGenerateKey);
+            elements.settingsBtn.addEventListener('click', openSettings);
+            elements.shortenBtn.addEventListener('click', handleShorten);
+            elements.urlInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleShorten();
+            });
+            elements.newAccountBtn.addEventListener('click', handleGenerateKey);
+            elements.loginBtn.addEventListener('click', handleLogin);
+            elements.loginKeyInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin();
+            });
+            
+            document.querySelectorAll('.close-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const modal = btn.closest('.modal');
+                    if (modal) closeModal(modal.id);
+                });
+            });
+            
+            window.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal')) {
+                    closeModal(e.target.id);
+                }
+            });
+
+            window.addEventListener('hashchange', async () => {
+                if (window.location.hash && window.location.hash.startsWith('#/')) {
+                    await handleHashRedirect();
+                }
+            });
+        }
+
+        init().catch(console.error);
+    </script>
+</body>
+</html>
