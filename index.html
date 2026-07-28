@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shortre - URL Shortening Service</title>
-    
     <script type="importmap">
     {
         "imports": {
@@ -14,6 +13,31 @@
     }
     </script>
 
+    <script>
+        (function() {
+            const THEME_STORAGE_KEY = 'shorter_theme_settings';
+            const NIGHT_START_HOUR = 22;
+            const NIGHT_END_HOUR = 7;
+            let autoEnabled = true;
+            let manualMode = 'light';
+            try {
+                const raw = localStorage.getItem(THEME_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (typeof parsed.autoEnabled === 'boolean') autoEnabled = parsed.autoEnabled;
+                    if (parsed.manualMode === 'dark') manualMode = 'dark';
+                }
+            } catch (e) {}
+            let isDark;
+            if (autoEnabled) {
+                const hour = new Date().getHours();
+                isDark = hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
+            } else {
+                isDark = manualMode === 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        })();
+    </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -28,12 +52,97 @@
             --radius: 16px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        html[data-theme="dark"] {
+            --primary: #8B7FFF;
+            --primary-dark: #6C63FF;
+            --bg: #14141F;
+            --card-bg: #1E1E2E;
+            --text: #EDEDF5;
+            --text-light: #A0A0B8;
+            --border: #2E2E40;
+            --shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
             line-height: 1.6;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+        .theme-toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .theme-toggle-row .toggle-desc {
+            font-size: 12px;
+            color: var(--text-light);
+            font-weight: 400;
+            margin-top: 4px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border);
+            transition: var(--transition);
+            border-radius: 24px;
+        }
+        .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: var(--transition);
+            border-radius: 50%;
+        }
+        .switch input:checked + .switch-slider {
+            background-color: var(--primary);
+        }
+        .switch input:checked + .switch-slider:before {
+            transform: translateX(20px);
+        }
+        .theme-mode-options {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .theme-mode-btn {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .theme-mode-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+        .theme-mode-options[hidden] {
+            display: none;
         }
         .navbar {
             background: var(--card-bg);
@@ -155,7 +264,7 @@
         .input-group input:focus {
             outline: none;
             border-color: var(--primary);
-            background: white;
+            background: var(--card-bg);
             box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.08);
         }
         .btn-primary {
@@ -280,7 +389,7 @@
             align-items: center;
             gap: 6px;
             padding: 8px 16px;
-            background: white;
+            background: var(--card-bg);
             border: 1.5px solid var(--border);
             border-radius: 10px;
             font-size: 13px;
@@ -321,7 +430,7 @@
         .search-box input:focus {
             outline: none;
             border-color: var(--primary);
-            background: white;
+            background: var(--card-bg);
             box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.08);
         }
         .search-box .search-icon {
@@ -444,7 +553,8 @@
             to { opacity: 1; }
         }
         .modal-content {
-            background: white;
+            background: var(--card-bg);
+            color: var(--text);
             border-radius: var(--radius);
             max-width: 700px;
             width: 90%;
@@ -453,6 +563,7 @@
             display: flex;
             flex-direction: column;
             animation: slideUp 0.3s ease;
+            transition: background 0.3s ease, color 0.3s ease;
         }
         .modal-header {
             padding: 24px 28px;
@@ -569,7 +680,8 @@
             position: fixed;
             bottom: 24px;
             right: 24px;
-            background: white;
+            background: var(--card-bg);
+            color: var(--text);
             padding: 16px 24px;
             border-radius: 12px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.15);
@@ -734,6 +846,22 @@
             </div>
             <div class="modal-body">
                 <div class="setting-group">
+                    <div class="theme-toggle-row">
+                        <div>
+                            <label data-i18n="autoThemeLabel" style="margin-bottom: 2px;">자동 다크모드</label>
+                            <div class="toggle-desc" data-i18n="autoThemeDesc">오후 10시 ~ 오전 7시에 자동으로 다크모드가 적용됩니다</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="autoThemeToggle">
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+                    <div class="theme-mode-options" id="manualThemeOptions" hidden>
+                        <button type="button" class="theme-mode-btn" id="lightModeBtn" data-i18n="lightModeBtn">라이트</button>
+                        <button type="button" class="theme-mode-btn" id="darkModeBtn" data-i18n="darkModeBtn">다크</button>
+                    </div>
+                </div>
+                <div class="setting-group">
                     <label data-i18n="privateKeyLabel">개인키 (Private Key)</label>
                     <div class="key-display">
                         <input type="text" id="privateKeyDisplay" readonly />
@@ -806,6 +934,10 @@
                 myUrlsTitle: 'My URLs',
                 searchPlaceholder: 'Search URLs...',
                 settingsTitle: 'Settings',
+                autoThemeLabel: 'Auto Dark Mode',
+                autoThemeDesc: 'Automatically switches to dark mode from 10 PM to 7 AM',
+                lightModeBtn: 'Light',
+                darkModeBtn: 'Dark',
                 privateKeyLabel: 'Private Key',
                 resetAccountBtn: 'Reset Account',
                 publicKeyLabel: 'Public Key',
@@ -862,6 +994,10 @@
                 myUrlsTitle: '내 URL 목록',
                 searchPlaceholder: 'URL 검색...',
                 settingsTitle: '설정',
+                autoThemeLabel: '자동 다크모드',
+                autoThemeDesc: '오후 10시 ~ 오전 7시에 자동으로 다크모드가 적용됩니다',
+                lightModeBtn: '라이트',
+                darkModeBtn: '다크',
                 privateKeyLabel: '개인키 (Private Key)',
                 resetAccountBtn: '계정 초기화',
                 publicKeyLabel: '공개키',
@@ -918,6 +1054,10 @@
                 myUrlsTitle: 'マイURL',
                 searchPlaceholder: 'URLを検索...',
                 settingsTitle: '設定',
+                autoThemeLabel: '自動ダークモード',
+                autoThemeDesc: '午後10時から午前7時まで自動的にダークモードに切り替わります',
+                lightModeBtn: 'ライト',
+                darkModeBtn: 'ダーク',
                 privateKeyLabel: '秘密鍵',
                 resetAccountBtn: 'アカウントをリセット',
                 publicKeyLabel: '公開鍵',
@@ -974,6 +1114,10 @@
                 myUrlsTitle: '我的URL',
                 searchPlaceholder: '搜索URL...',
                 settingsTitle: '设置',
+                autoThemeLabel: '自动深色模式',
+                autoThemeDesc: '晚上10点到早上7点自动切换为深色模式',
+                lightModeBtn: '浅色',
+                darkModeBtn: '深色',
                 privateKeyLabel: '私钥',
                 resetAccountBtn: '重置账户',
                 publicKeyLabel: '公钥',
@@ -1107,7 +1251,11 @@
             searchInput: document.getElementById('searchInput'),
             statsModal: document.getElementById('statsModal'),
             statsContent: document.getElementById('statsContent'),
-            statsModalTitle: document.getElementById('statsModalTitle')
+            statsModalTitle: document.getElementById('statsModalTitle'),
+            autoThemeToggle: document.getElementById('autoThemeToggle'),
+            manualThemeOptions: document.getElementById('manualThemeOptions'),
+            lightModeBtn: document.getElementById('lightModeBtn'),
+            darkModeBtn: document.getElementById('darkModeBtn')
         };
 
         elements.domainPrefix.textContent = window.location.host + '/';
@@ -1164,7 +1312,8 @@
                 position: fixed;
                 bottom: 24px;
                 right: 24px;
-                background: white;
+                background: var(--card-bg);
+                color: var(--text);
                 padding: 16px 24px;
                 border-radius: 12px;
                 box-shadow: 0 8px 30px rgba(0,0,0,0.15);
@@ -1657,6 +1806,30 @@
             return null;
         }
 
+        async function fetchAllUsedCodes() {
+            const ndk = new NDK({ explicitRelayUrls: ['wss://nos.lol'] });
+            await ndk.connect();
+
+            const filter = {
+                kinds: [1],
+                '#t': ['shtre']
+            };
+
+            const events = await ndk.fetchEvents(filter);
+            const codes = new Set();
+
+            for (const event of events) {
+                try {
+                    const content = JSON.parse(event.content);
+                    if (content.type === 'SHORTER_URL' && content.code) {
+                        codes.add(content.code);
+                    }
+                } catch (e) {}
+            }
+
+            return codes;
+        }
+
         async function findUrlsByOwner(privateKey) {
             const signer = getSigner(privateKey);
             const pubKey = globalPubKey || signer.pubkey;
@@ -1879,13 +2052,30 @@
             }
         }
 
-        function generateShortCode() {
+        function generateShortCode(length = 6) {
             const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let result = '';
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < length; i++) {
                 result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             return result;
+        }
+
+
+        function generateUniqueShortCode(existingCodes) {
+            let length = 6;
+            const attemptsPerLength = 50;
+
+            while (true) {
+                for (let i = 0; i < attemptsPerLength; i++) {
+                    const candidate = generateShortCode(length);
+                    if (!existingCodes.has(candidate)) {
+                        return candidate;
+                    }
+                }
+
+                length++;
+            }
         }
 
         async function handleGenerateKey() {
@@ -1990,12 +2180,9 @@
 
                     shortCode = customCode;
                 } else {
-                    shortCode = generateShortCode();
-
-                    let attempts = 0;
-                    let existing;
+                    let usedCodes;
                     try {
-                        existing = await findUrlByCode(shortCode);
+                        usedCodes = await fetchAllUsedCodes();
                     } catch (checkError) {
                         showNotification('duplicateCheckError', 'error');
                         btn.textContent = originalText;
@@ -2003,43 +2190,34 @@
                         return;
                     }
 
-                    while (existing && attempts < 5) {
-                        shortCode = generateShortCode();
-                        try {
-                            existing = await findUrlByCode(shortCode);
-                        } catch (checkError) {
-                            showNotification('duplicateCheckError', 'error');
-                            btn.textContent = originalText;
-                            btn.disabled = false;
-                            return;
-                        }
-                        attempts++;
-                    }
+                    shortCode = generateUniqueShortCode(usedCodes);
+                }
 
-                    if (existing) {
-                        showNotification('codeGenerationFailed', 'error');
+                let finalCheck;
+                let raceGuard = 0;
+                let raceCodeLength = shortCode.length;
+                do {
+                    try {
+                        finalCheck = await findUrlByCode(shortCode);
+                    } catch (checkError) {
+                        showNotification('duplicateCheckError', 'error');
                         btn.textContent = originalText;
                         btn.disabled = false;
                         return;
                     }
-                }
 
-                let finalCheck;
-                try {
-                    finalCheck = await findUrlByCode(shortCode);
-                } catch (checkError) {
-                    showNotification('duplicateCheckError', 'error');
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    return;
-                }
-
-                if (finalCheck) {
-                    showNotification(customCode ? 'customCodeTaken' : 'codeGenerationFailed', 'error');
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    return;
-                }
+                    if (finalCheck) {
+                        if (customCode) {
+                            showNotification('customCodeTaken', 'error');
+                            btn.textContent = originalText;
+                            btn.disabled = false;
+                            return;
+                        }
+                        raceGuard++;
+                        if (raceGuard % 20 === 0) raceCodeLength++;
+                        shortCode = generateShortCode(raceCodeLength);
+                    }
+                } while (finalCheck);
 
                 await saveUrlToNostr(privateKey, shortCode, url);
                 
@@ -2273,7 +2451,110 @@
         window.openSettings = openSettings;
         window.showStats = showStats;
 
+        const THEME_STORAGE_KEY = 'shorter_theme_settings';
+        const NIGHT_START_HOUR = 22;
+        const NIGHT_END_HOUR = 7;
+        let themeCheckIntervalId = null;
+
+        function getThemeSettings() {
+            try {
+                const raw = localStorage.getItem(THEME_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return {
+                        autoEnabled: typeof parsed.autoEnabled === 'boolean' ? parsed.autoEnabled : true,
+                        manualMode: parsed.manualMode === 'dark' ? 'dark' : 'light'
+                    };
+                }
+            } catch (e) {}
+            return { autoEnabled: true, manualMode: 'light' };
+        }
+
+        function saveThemeSettings(settings) {
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(settings));
+            } catch (e) {}
+        }
+
+        function isNightTimeNow() {
+            const hour = new Date().getHours();
+            return hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
+        }
+
+        function applyThemeToDOM(isDark) {
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        }
+
+        function updateManualModeButtonsUI(manualMode) {
+            if (elements.lightModeBtn) {
+                elements.lightModeBtn.classList.toggle('active', manualMode === 'light');
+            }
+            if (elements.darkModeBtn) {
+                elements.darkModeBtn.classList.toggle('active', manualMode === 'dark');
+            }
+        }
+
+        function refreshTheme() {
+            const settings = getThemeSettings();
+            if (settings.autoEnabled) {
+                applyThemeToDOM(isNightTimeNow());
+            } else {
+                applyThemeToDOM(settings.manualMode === 'dark');
+            }
+        }
+
+        function syncThemeSettingsUI() {
+            const settings = getThemeSettings();
+            if (elements.autoThemeToggle) {
+                elements.autoThemeToggle.checked = settings.autoEnabled;
+            }
+            if (elements.manualThemeOptions) {
+                elements.manualThemeOptions.hidden = settings.autoEnabled;
+            }
+            updateManualModeButtonsUI(settings.manualMode);
+        }
+
+        function handleAutoThemeToggleChange() {
+            const settings = getThemeSettings();
+            settings.autoEnabled = elements.autoThemeToggle.checked;
+            saveThemeSettings(settings);
+            syncThemeSettingsUI();
+            refreshTheme();
+        }
+
+        function handleManualModeSelect(mode) {
+            const settings = getThemeSettings();
+            settings.manualMode = mode;
+            saveThemeSettings(settings);
+            updateManualModeButtonsUI(mode);
+            refreshTheme();
+        }
+
+        function initThemeSystem() {
+            refreshTheme();
+            syncThemeSettingsUI();
+
+            if (elements.autoThemeToggle) {
+                elements.autoThemeToggle.addEventListener('change', handleAutoThemeToggleChange);
+            }
+            if (elements.lightModeBtn) {
+                elements.lightModeBtn.addEventListener('click', () => handleManualModeSelect('light'));
+            }
+            if (elements.darkModeBtn) {
+                elements.darkModeBtn.addEventListener('click', () => handleManualModeSelect('dark'));
+            }
+
+            if (themeCheckIntervalId) clearInterval(themeCheckIntervalId);
+            themeCheckIntervalId = setInterval(() => {
+                const settings = getThemeSettings();
+                if (settings.autoEnabled) {
+                    applyThemeToDOM(isNightTimeNow());
+                }
+            }, 60000);
+        }
+
         async function init() {
+            initThemeSystem();
             applyTranslations();
             
             if (window.location.hash && window.location.hash.startsWith('#/')) {
