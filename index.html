@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shortre - URL Shortening Service</title>
+    <meta name="google-site-verification" content="MgE0c2ENmArn5vl2RNW4Z_9E33tseBVf8WsfgkybPzo" />
+    <meta name="google-site-verification" content="ByS48RQtA7FJrkeaT54p9DrbvMuVSuGmCkhl95VnUTE" />
+    <meta name="keywords" content="URL 단축, URL 줄이기, 링크 단축, 짧은 링크, 단축 URL, 무료 URL 단축, URL Shortener, link shortener, shorten URL, short link, free URL shortener, Shortre, 쇼트리, shtre">
+    <meta name="description" content="Shortre is a free URL shortening service that converts long URLs into short, simple links. Create and share shortened URLs quickly and easily without signing up.">
     <script type="importmap">
     {
         "imports": {
@@ -1549,14 +1553,12 @@
             const ownerPubkey = knownOwnerPubkey || await getUrlOwnerPubkey(code);
             if (!ownerPubkey) return;
 
-            const ephemeralKey = generateEphemeralKey();
-            await saveAnalyticsToNostr(
-                ephemeralKey,
-                code,
-                [visitData],
-                new Set([visitorId]),
-                ownerPubkey
-            );
+            try {
+                const ephemeralKey = generateEphemeralKey();
+                await saveAnalyticsToNostr(ephemeralKey, code, [visitData], new Set([visitorId]), ownerPubkey);
+            } catch (e) {
+                alert('Nostr analytics save failed: ' + e.message);
+            }
         }
 
         function loadAnalytics() {
