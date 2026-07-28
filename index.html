@@ -1832,21 +1832,35 @@
 
             const events = await ndk.fetchEvents(filter);
 
+            let earliestMatch = null;
+
             for (const event of events) {
                 try {
                     const content = JSON.parse(event.content);
                     if (content.type === 'SHORTER_URL' && content.code === shortCode) {
-                        return {
-                            url: content.url,
-                            owner: content.owner,
-                            created: content.created,
-                            pubkey: event.pubkey,
-                            id: event.id
-                        };
+                        // 같은 코드의 단축 URL이 여러 개면 가장 먼저 생성된 것을 선택
+                        const createdAt = typeof content.created === 'number'
+                            ? content.created
+                            : event.created_at;
+
+                        if (!earliestMatch || createdAt < earliestMatch.createdAt) {
+                            earliestMatch = {
+                                url: content.url,
+                                owner: content.owner,
+                                created: content.created,
+                                pubkey: event.pubkey,
+                                id: event.id,
+                                createdAt
+                            };
+                        }
                     }
                 } catch (e) {}
             }
-            return null;
+
+            if (!earliestMatch) return null;
+
+            const { createdAt, ...result } = earliestMatch;
+            return result;
         }
 
         async function fetchAllUsedCodes() {
